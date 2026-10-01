@@ -163,7 +163,9 @@ def _apply_default_params(
 
     # If curr num replicas is 0 and the policy wants to scale up (e.g. based on internal
     # signals like queue length), bypass the delay logic for immediate scale-up.
-    if ctx.current_num_replicas == 0 and desired_num_replicas > 0:
+    # Compare against the target: replicas can still be starting (or all lost),
+    # and a lower decision then is a downscale that must wait for its delay.
+    if ctx.current_num_replicas == 0 and desired_num_replicas > ctx.target_num_replicas:
         return desired_num_replicas, policy_state
 
     # Apply delay logic

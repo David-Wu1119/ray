@@ -1227,6 +1227,51 @@ class TestCustomPolicyWithDefaultParameters:
         num_replicas, _ = simple_custom_policy(ctx)
         assert num_replicas == expected_replicas
 
+    @pytest.mark.parametrize(
+        "target_num_replicas, expected_replicas",
+        [
+            # Scaling up from zero still skips upscale_delay_s.
+            (0, 1),
+            # No replica RUNNING yet (or all lost): going down from the target
+            # waits for downscale_delay_s.
+            (5, 5),
+            (10, 10),
+        ],
+    )
+    def test_no_running_replicas_delay(self, target_num_replicas, expected_replicas):
+        @_apply_autoscaling_config
+        def policy(ctx):
+            # Like AsyncInferenceAutoscalingPolicy with a backlog and 0 running.
+            return 1, {}
+
+        config = AutoscalingConfig(
+            min_replicas=1,
+            max_replicas=10,
+            upscale_delay_s=30.0,
+            downscale_delay_s=600.0,
+        )
+        ctx = AutoscalingContext(
+            config=config,
+            deployment_id=None,
+            deployment_name="test",
+            app_name=None,
+            current_num_replicas=0,
+            target_num_replicas=target_num_replicas,
+            running_replicas=None,
+            total_num_requests=0,
+            total_queued_requests=None,
+            aggregated_metrics=None,
+            raw_metrics=None,
+            capacity_adjusted_min_replicas=config.min_replicas,
+            capacity_adjusted_max_replicas=config.max_replicas,
+            policy_state={},
+            last_scale_up_time=None,
+            last_scale_down_time=None,
+            current_time=None,
+        )
+        num_replicas, _ = policy(ctx)
+        assert num_replicas == expected_replicas
+
 
 class TestAppLevelPolicyWithDefaultParameters:
     def test_cold_start_fast_path(self):
